@@ -11,7 +11,7 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 # Variable pour le mot de passe (à configurer sur Render)
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "7172")
+ADMIN_PASSWORD = "mybilloniaword2006$$"
 
 @app.on_event("startup")
 def startup():
