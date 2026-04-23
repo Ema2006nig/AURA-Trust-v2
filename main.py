@@ -1,62 +1,41 @@
 import os
 import sqlite3
-import psycopg2
 import qrcode
 from datetime import datetime
 from io import BytesIO
 from fastapi import FastAPI, Form, Request, Response
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 
 app = FastAPI()
 
-# --- CONFIGURATION DES CHEMINS ---
+# --- CONFIGURATION DES TEMPLATES ---
+# On utilise le chemin le plus direct possible
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# On initialise les templates, mais on prépare un mode secours
-try:
-    templates = Jinja2Templates(directory=TEMPLATES_DIR)
-except Exception:
-    templates = None
+# --- MOT DE PASSE (Récupéré depuis Render Environment) ---
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "code7172")
 
-# --- RÉCUPÉRATION DES VARIABLES D'ENVIRONNEMENT ---
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "code_par_defaut_7172")
-DATABASE_URL = os.getenv("DATABASE_URL")
-
+# --- BASE DE DONNÉES ---
 @app.on_event("startup")
 def init_db():
-    # Création de la base locale de secours
-    try:
-        conn = sqlite3.connect("backup.db")
-        conn.execute("CREATE TABLE IF NOT EXISTS certs (id TEXT, name TEXT, type TEXT, date TEXT)")
-        conn.commit()
-        conn.close()
-        print("✅ Base de données locale prête.")
-    except:
-        pass
+    conn = sqlite3.connect("database.db")
+    conn.execute("CREATE TABLE IF NOT EXISTS certs (id TEXT, name TEXT, type TEXT, date TEXT)")
+    conn.commit()
+    conn.close()
 
-# --- LA ROUTE DE TEST (ACCUEIL) ---
-@app.get("/")
+# --- ROUTES ---
+
+@app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    """
-    Cette route essaie d'afficher index.html. 
-    Si elle échoue, elle affiche un message de diagnostic au lieu d'une erreur 500.
-    """
-    try:
-        return templates.TemplateResponse("index.html", {"request": request})
-    except Exception as e:
-        return JSONResponse({
-            "status": "Le serveur fonctionne ! ✅",
-            "erreur": "Le fichier 'index.html' est introuvable ou mal placé.",
-            "detail_technique": str(e),
-            "conseil": "Vérifie que ton dossier sur GitHub s'appelle bien 'templates' (avec un s)."
-        })
+    # C'est cette ligne qui cherche 'templates/index.html'
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post("/generate")
+@app.post("/generate", response_class=HTMLResponse)
 async def generate(request: Request, name: str = Form(...), cert_type: str = Form(...), password: str = Form(...)):
     if password != ADMIN_PASSWORD:
         return HTMLResponse("❌ Mot de passe incorrect", status_code=403)
@@ -64,22 +43,34 @@ async def generate(request: Request, name: str = Form(...), cert_type: str = For
     cert_id = f"AURA-{os.urandom(3).hex().upper()}"
     date_str = datetime.now().strftime("%d/%m/%Y")
     
-    # Sauvegarde simple
-    try:
-        conn = sqlite3.connect("backup.db")
-        conn.execute("INSERT INTO certs VALUES (?, ?, ?, ?)", (cert_id, name, cert_type, date_str))
-        conn.commit()
-        conn.close()
-    except: pass
+    conn = sqlite3.connect("database.db")
+    conn.execute("INSERT INTO certs VALUES (?, ?, ?, ?)", (cert_id, name, cert_type, date_str))
+    conn.commit()
+    conn.close()
     
     return templates.TemplateResponse("result.html", {"request": request, "cert_id": cert_id, "name": name})
 
-@app.get("/verify/{cert_id}")
+@app.get("/verify/{cert_id}", response_class=HTMLResponse)
 async def verify(request: Request, cert_id: str):
-    try:
-        conn = sqlite3.connect("backup.db")
-        data = conn.execute("SELECT name, type, date FROM certs WHERE id = ?", (cert_id,)).fetchone()
-        conn.close()
-        return templates.TemplateResponse("verify.html", {"request": request, "cert_id": cert_id, "data": data})
-    except:
-        return JSONResponse({"erreur": "Impossible de charger la page de vérification"})
+    conn = sqlite3.connect("database.db")
+    data = conn.execute("SELECT name, type, date FROM certs WHERE id = ?", (cert_id,)).fetchone()
+    conn.close()
+    return templates.TemplateResponse("verify.html", {"request": request, "cert_id": cert_id, "data": data})
+
+@app.get("/download/{cert_id}")
+async def download(cert_id: str):
+    conn = sqlite3.connect("database.db")
+    data = conn.execute("SELECT name, type, date FROM certs WHERE id = ?", (cert_id,)).fetchone()
+    conn.close()
+    
+    if not data: return Response(status_code=404)
+    
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    p.setFont("Helvetica-Bold", 25)
+    p.drawCentredString(297, 750, "CERTIFICAT AURA TRUST")
+    p.setFont("Helvetica", 18)
+    p.drawCentredString(297, 500, data[0].upper())
+    p.save()
+    buffer.seek(0)
+    return Response(content=buffer.getvalue(), media_type="application/pdf")
