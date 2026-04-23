@@ -1,8 +1,7 @@
 fastapi
 uvicorn
-pydantic
-psycopg2-binary
-reportlab
-qrcode[pil]
 jinja2
 python-multipart
+qrcode
+reportlab
+psycopg2-binary
