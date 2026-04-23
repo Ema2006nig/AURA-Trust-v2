@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AURA Trust - Espace Admin</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding-top: 50px; }
+        .box { background: white; padding: 30px; display: inline-block; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        input, select { display: block; margin: 15px auto; padding: 12px; width: 280px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>🛡️ Administration AURA</h1>
+        <form action="/generate" method="post">
+            <input type="text" name="name" placeholder="Nom du client" required>
+            <select name="cert_type">
+                <option value="Certification d'Origine">Certification d'Origine</option>
+                <option value="Badge d'Intégrité">Badge d'Intégrité</option>
+            </select>
+            <input type="password" name="password" placeholder="Mot de passe secret" required>
+            <button type="submit">Générer & Encaisser</button>
+        </form>
+    </div>
+</body>
+</html>
